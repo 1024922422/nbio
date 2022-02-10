@@ -61,7 +61,7 @@ func (c *Conn) Read(b []byte) (int, error) {
 		c.mux.Unlock()
 		return 0, errClosed
 	}
-	
+
 	n, err := syscall.Read(c.fd, b)
 	c.mux.Unlock()
 	if err == nil {
@@ -286,7 +286,7 @@ func (c *Conn) SetSession(session interface{}) {
 func (c *Conn) modWrite() {
 	if !c.closed && !c.isWAdded {
 		c.isWAdded = true
-		c.g.pollers[c.Hash()%len(c.g.pollers)].modWrite(c.fd)
+		c.g.pollers[c.Hash()%len(c.g.pollers)].modWrite(c)
 	}
 }
 
@@ -295,7 +295,7 @@ func (c *Conn) resetRead() {
 		c.isWAdded = false
 		p := c.g.pollers[c.Hash()%len(c.g.pollers)]
 		p.deleteEvent(c.fd)
-		p.addRead(c.fd)
+		p.addRead(c)
 	}
 }
 

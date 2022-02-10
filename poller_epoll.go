@@ -7,6 +7,14 @@
 
 package nbio
 
+/*
+#include <sys/epoll.h>
+
+typedef struct epoll_event EpollEvent;
+typedef epoll_data_t EpollData;
+*/
+import "C"
+
 import (
 	"errors"
 	"io"
@@ -60,7 +68,7 @@ func (p *poller) addConn(c *Conn) {
 	p.g.onOpen(c)
 	fd := c.fd
 	p.g.connsUnix[fd] = c
-	err := p.addRead(fd)
+	err := p.addRead(c)
 	if err != nil {
 		p.g.connsUnix[fd] = nil
 		c.closeWithError(err)
@@ -140,7 +148,7 @@ func (p *poller) readWriteLoop() {
 	}
 
 	msec := -1
-	events := make([]syscall.EpollEvent, 1024)
+	events := make([]C.EpollEvent, 1024)
 
 	if p.g.onRead == nil && p.g.epollMod == syscall.EPOLLET {
 		p.g.maxReadTimesPerEventLoop = 1<<31 - 1
@@ -149,7 +157,7 @@ func (p *poller) readWriteLoop() {
 	p.shutdown = false
 
 	for !p.shutdown {
-		n, err := syscall.EpollWait(p.epfd, events, msec)
+		n, err := epollWait(p.epfd, events, msec)
 		if err != nil && !errors.Is(err, syscall.EINTR) {
 			return
 		}
@@ -162,22 +170,21 @@ func (p *poller) readWriteLoop() {
 		msec = 20
 
 		for _, ev := range events[:n] {
-			fd := int(ev.Fd)
-			switch fd {
+			c := *((**Conn)(unsafe.Pointer(&ev.data)))
+			switch c.fd {
 			case p.evtfd:
 			default:
-				c := p.getConn(fd)
 				if c != nil {
-					if ev.Events&epollEventsError != 0 {
+					if ev.events&epollEventsError != 0 {
 						c.closeWithError(io.EOF)
 						continue
 					}
 
-					if ev.Events&epollEventsWrite != 0 {
+					if ev.events&epollEventsWrite != 0 {
 						c.flush()
 					}
 
-					if ev.Events&epollEventsRead != 0 {
+					if ev.events&epollEventsRead != 0 {
 						if p.g.onRead == nil {
 							for i := 0; i < p.g.maxReadTimesPerEventLoop; i++ {
 								buffer := p.g.borrow(c)
@@ -204,8 +211,8 @@ func (p *poller) readWriteLoop() {
 						}
 					}
 				} else {
-					syscall.Close(fd)
-					p.deleteEvent(fd)
+					syscall.Close(c.fd)
+					p.deleteEvent(c.fd)
 				}
 			}
 		}
@@ -223,12 +230,25 @@ func (p *poller) stop() {
 	}
 }
 
-func (p *poller) addRead(fd int) error {
+func (p *poller) addRead(c *Conn) error {
+	ptr := *((*[8]byte)(unsafe.Pointer(&c)))
 	switch p.g.epollMod {
 	case EPOLLET:
-		return syscall.EpollCtl(p.epfd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{Fd: int32(fd), Events: epollEventsReadET})
+		_, _, err := syscall.RawSyscall6(syscall.SYS_EPOLL_CTL, uintptr(p.epfd), uintptr(syscall.EPOLL_CTL_ADD), uintptr(c.fd),
+			uintptr(unsafe.Pointer(&C.EpollEvent{data: C.EpollData{ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5], ptr[6], ptr[7]}, events: epollEventsReadET})),
+			0, 0)
+		if err == 0 {
+			return nil
+		}
+		return err
 	default:
-		return syscall.EpollCtl(p.epfd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{Fd: int32(fd), Events: epollEventsRead})
+		_, _, err := syscall.RawSyscall6(syscall.SYS_EPOLL_CTL, uintptr(p.epfd), uintptr(syscall.EPOLL_CTL_ADD), uintptr(c.fd),
+			uintptr(unsafe.Pointer(&C.EpollEvent{data: C.EpollData{ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5], ptr[6], ptr[7]}, events: epollEventsRead})),
+			0, 0)
+		if err == 0 {
+			return nil
+		}
+		return err
 	}
 }
 
@@ -236,12 +256,25 @@ func (p *poller) addRead(fd int) error {
 // 	return syscall.EpollCtl(p.epfd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{Fd: int32(fd), Events: syscall.EPOLLOUT})
 // }
 
-func (p *poller) modWrite(fd int) error {
+func (p *poller) modWrite(c *Conn) error {
+	ptr := *((*[8]byte)(unsafe.Pointer(&c)))
 	switch p.g.epollMod {
 	case EPOLLET:
-		return syscall.EpollCtl(p.epfd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{Fd: int32(fd), Events: epollEventsReadWriteET})
+		_, _, err := syscall.RawSyscall6(syscall.SYS_EPOLL_CTL, uintptr(p.epfd), uintptr(syscall.EPOLL_CTL_ADD), uintptr(c.fd),
+			uintptr(unsafe.Pointer(&C.EpollEvent{data: C.EpollData{ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5], ptr[6], ptr[7]}, events: epollEventsReadWriteET})),
+			0, 0)
+		if err == 0 {
+			return nil
+		}
+		return err
 	default:
-		return syscall.EpollCtl(p.epfd, syscall.EPOLL_CTL_MOD, fd, &syscall.EpollEvent{Fd: int32(fd), Events: epollEventsReadWrite})
+		_, _, err := syscall.RawSyscall6(syscall.SYS_EPOLL_CTL, uintptr(p.epfd), uintptr(syscall.EPOLL_CTL_MOD), uintptr(c.fd),
+			uintptr(unsafe.Pointer(&C.EpollEvent{data: C.EpollData{ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5], ptr[6], ptr[7]}, events: epollEventsReadWrite})),
+			0, 0)
+		if err == 0 {
+			return nil
+		}
+		return err
 	}
 }
 
@@ -283,11 +316,21 @@ func newPoller(g *Gopher, isListener bool, index int) (*poller, error) {
 		return nil, err
 	}
 
-	err = syscall.EpollCtl(fd, syscall.EPOLL_CTL_ADD, int(r0),
-		&syscall.EpollEvent{Fd: int32(r0),
-			Events: syscall.EPOLLIN,
-		},
-	)
+	// err = syscall.EpollCtl(fd, syscall.EPOLL_CTL_ADD, int(r0),
+	// 	&syscall.EpollEvent{Fd: int32(r0),
+	// 		Events: syscall.EPOLLIN,
+	// 	},
+	// )
+	c := &Conn{fd: int(r0)}
+	ptr := *((*[8]byte)(unsafe.Pointer(&c)))
+	_, _, e1 := syscall.RawSyscall6(syscall.SYS_EPOLL_CTL, uintptr(fd), uintptr(syscall.EPOLL_CTL_ADD), uintptr(c.fd),
+		uintptr(unsafe.Pointer(&C.EpollEvent{data: C.EpollData{ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5], ptr[6], ptr[7]}, events: syscall.EPOLLIN})),
+		0, 0)
+	if e1 == 0 {
+		err = nil
+	} else {
+		err = e1
+	}
 	if err != nil {
 		syscall.Close(fd)
 		syscall.Close(int(r0))
@@ -304,4 +347,20 @@ func newPoller(g *Gopher, isListener bool, index int) (*poller, error) {
 	}
 
 	return p, nil
+}
+
+var _zero uintptr
+func epollWait(epfd int, events []C.EpollEvent, msec int) (n int, err error) {
+	var _p0 unsafe.Pointer
+	if len(events) > 0 {
+		_p0 = unsafe.Pointer(&events[0])
+	} else {
+		_p0 = unsafe.Pointer(&_zero)
+	}
+	r0, _, e1 := syscall.Syscall6(syscall.SYS_EPOLL_WAIT, uintptr(epfd), uintptr(_p0), uintptr(len(events)), uintptr(msec), 0, 0)
+	n = int(r0)
+	if e1 != 0 {
+		err = syscall.Errno(e1)
+	}
+	return
 }

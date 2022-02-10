@@ -76,16 +76,16 @@ func (p *poller) trigger() {
 	syscall.Kevent(p.kfd, []syscall.Kevent_t{{Ident: 0, Filter: syscall.EVFILT_USER, Fflags: syscall.NOTE_TRIGGER}}, nil, nil)
 }
 
-func (p *poller) addRead(fd int) {
+func (p *poller) addRead(c *Conn) {
 	p.mux.Lock()
-	p.eventList = append(p.eventList, syscall.Kevent_t{Ident: uint64(fd), Flags: syscall.EV_ADD, Filter: syscall.EVFILT_READ})
+	p.eventList = append(p.eventList, syscall.Kevent_t{Ident: uint64(c.fd), Flags: syscall.EV_ADD, Filter: syscall.EVFILT_READ})
 	p.mux.Unlock()
 	p.trigger()
 }
 
-func (p *poller) modWrite(fd int) {
+func (p *poller) modWrite(c *Conn) {
 	p.mux.Lock()
-	p.eventList = append(p.eventList, syscall.Kevent_t{Ident: uint64(fd), Flags: syscall.EV_ADD, Filter: syscall.EVFILT_WRITE})
+	p.eventList = append(p.eventList, syscall.Kevent_t{Ident: uint64(c.fd), Flags: syscall.EV_ADD, Filter: syscall.EVFILT_WRITE})
 	p.mux.Unlock()
 	p.trigger()
 }
