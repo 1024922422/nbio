@@ -67,10 +67,10 @@ func (p *poller) addConn(c *Conn) {
 	c.g = p.g
 	p.g.onOpen(c)
 	fd := c.fd
-	p.g.connsUnix[fd] = c
+	// p.g.connsUnix[fd] = c
 	err := p.addRead(c)
 	if err != nil {
-		p.g.connsUnix[fd] = nil
+		// p.g.connsUnix[fd] = nil
 		c.closeWithError(err)
 		logging.Error("[%v] add read event failed: %v", c.fd, err)
 		return
@@ -350,6 +350,7 @@ func newPoller(g *Gopher, isListener bool, index int) (*poller, error) {
 }
 
 var _zero uintptr
+
 func epollWait(epfd int, events []C.EpollEvent, msec int) (n int, err error) {
 	var _p0 unsafe.Pointer
 	if len(events) > 0 {
