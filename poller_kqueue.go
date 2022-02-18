@@ -53,7 +53,7 @@ func (p *poller) addConn(c *Conn) {
 	p.g.onOpen(c)
 	fd := c.fd
 	p.g.connsUnix[fd] = c
-	p.addRead(c.fd)
+	p.addRead(c)
 }
 
 func (p *poller) getConn(fd int) *Conn {
