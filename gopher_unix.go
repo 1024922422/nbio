@@ -109,11 +109,13 @@ func NewGopher(conf Config) *Gopher {
 		lockPoller:               conf.LockPoller,
 		listeners:                make([]*poller, len(conf.Addrs)),
 		pollers:                  make([]*poller, conf.NPoller),
-		connsUnix:                make([]*Conn, MaxOpenFiles),
-		callings:                 []func(){},
-		chCalling:                make(chan struct{}, 1),
-		trigger:                  time.NewTimer(timeForever),
-		chTimer:                  make(chan struct{}),
+		callings:  []func(){},
+		chCalling: make(chan struct{}, 1),
+		trigger:   time.NewTimer(timeForever),
+		chTimer:   make(chan struct{}),
+	}
+	if runtime.GOOS != "linux" {
+		g.connsUnix = make([]*Conn, MaxOpenFiles)
 	}
 
 	g.initHandlers()
