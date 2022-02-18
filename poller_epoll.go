@@ -85,11 +85,12 @@ func (p *poller) deleteConn(c *Conn) {
 	if c == nil {
 		return
 	}
-	fd := c.fd
-	if c == p.g.connsUnix[fd] {
-		p.g.connsUnix[fd] = nil
-		p.deleteEvent(fd)
-	}
+	// fd := c.fd
+	// if c == p.g.connsUnix[fd] {
+	// 	p.g.connsUnix[fd] = nil
+	// 	p.deleteEvent(fd)
+	// }
+	p.deleteEvent(c.fd)
 	p.g.onClose(c, c.closeErr)
 }
 
