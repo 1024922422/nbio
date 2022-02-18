@@ -360,7 +360,7 @@ func epollWait(epfd int, events []C.EpollEvent, msec int) (n int, err error) {
 	r0, _, e1 := syscall.Syscall6(syscall.SYS_EPOLL_WAIT, uintptr(epfd), uintptr(_p0), uintptr(len(events)), uintptr(msec), 0, 0)
 	n = int(r0)
 	if e1 != 0 {
-		err = syscall.Errno(e1)
+		err = e1
 	}
 	return
 }
