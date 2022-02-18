@@ -66,7 +66,7 @@ type poller struct {
 func (p *poller) addConn(c *Conn) {
 	c.g = p.g
 	p.g.onOpen(c)
-	fd := c.fd
+	// fd := c.fd
 	// p.g.connsUnix[fd] = c
 	err := p.addRead(c)
 	if err != nil {
