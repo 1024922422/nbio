@@ -448,8 +448,10 @@ func (c *Conn) closeWithErrorWithoutLock(err error) error {
 		c.rTimer = nil
 	}
 
-	mempool.Free(c.writeBuffer)
-	c.writeBuffer = nil
+	if c.writeBuffer != nil {
+		mempool.Free(c.writeBuffer)
+		c.writeBuffer = nil
+	}
 
 	if c.chWaitWrite != nil {
 		select {
