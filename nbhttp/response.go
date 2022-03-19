@@ -125,7 +125,7 @@ func (res *Response) Write(data []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		buf = mempool.Malloc(0)
+		buf = mempool.Malloc(len(data)+2)[0:0]
 		buf = mempool.Append(buf, data...)
 		buf = mempool.AppendString(buf, "\r\n")
 		if len(buf) < maxPacketSize {
