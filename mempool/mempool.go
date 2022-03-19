@@ -29,8 +29,8 @@ type MemPool struct {
 	mux         sync.Mutex
 	pool        sync.Pool
 	minSize     int
-	allocStacks map[*byte]string
-	freeStacks  map[*byte]string
+	allocStacks map[string]int
+	freeStacks  map[string]int
 }
 
 // New .
@@ -40,8 +40,8 @@ func New(minSize int) Allocator {
 	}
 	mp := &MemPool{
 		minSize:     minSize,
-		allocStacks: map[*byte]string{},
-		freeStacks:  map[*byte]string{},
+		allocStacks: map[string]int{},
+		freeStacks:  map[string]int{},
 		// Debug:       true,
 	}
 	mp.pool.New = func() interface{} {
@@ -113,35 +113,55 @@ func (mp *MemPool) AppendString(buf []byte, more string) []byte {
 
 // Free .
 func (mp *MemPool) Free(buf []byte) {
-	if cap(buf) < mp.minSize {
-		return
-	}
 	if mp.Debug {
 		mp.saveFreeStack(buf)
 	}
+
+	if cap(buf) < mp.minSize {
+		return
+	}
+
 	mp.pool.Put(&buf)
 }
 
 func (mp *MemPool) saveFreeStack(buf []byte) {
-	p := &(buf[:1][0])
 	mp.mux.Lock()
 	defer mp.mux.Unlock()
-	s, ok := mp.freeStacks[p]
-	if ok {
-		allocStack := mp.allocStacks[p]
-		err := fmt.Errorf("\nbuffer exists: %p\nprevious allocation:\n%v\nprevious free:\n%v\ncurrent free:\n%v", p, allocStack, s, getStack())
-		panic(err)
-	}
-	mp.freeStacks[p] = getStack()
-	delete(mp.allocStacks, p)
+	s := getStack()
+	mp.freeStacks[s] = mp.freeStacks[s] + 1
 }
 
 func (mp *MemPool) saveAllocStack(buf []byte) {
-	p := &(buf[:1][0])
 	mp.mux.Lock()
 	defer mp.mux.Unlock()
-	delete(mp.freeStacks, p)
-	mp.allocStacks[p] = getStack()
+	s := getStack()
+	mp.allocStacks[s] = mp.allocStacks[s] + 1
+}
+
+func (mp *MemPool) LogDebugInfo() {
+	mp.mux.Lock()
+	defer mp.mux.Unlock()
+	totalAlloc := 0
+	totalFree := 0
+	fmt.Println("*********************************************************")
+	fmt.Println("Alloc")
+	for s, n := range mp.allocStacks {
+		fmt.Println("num:", n)
+		fmt.Println("stack:\n", s)
+		totalAlloc += n
+		fmt.Println("*********************************************************")
+	}
+	fmt.Println("---------------------------------------------------------")
+	fmt.Println("Free")
+	for s, n := range mp.freeStacks {
+		fmt.Println("num:", n)
+		fmt.Println("stack:\n", s)
+		totalFree += n
+		fmt.Println("---------------------------------------------------------")
+	}
+	fmt.Println("totalAlloc:", totalAlloc)
+	fmt.Println("totalFree:", totalFree)
+	fmt.Println("*********************************************************")
 }
 
 // NativeAllocator definition.
@@ -189,6 +209,22 @@ func AppendString(buf []byte, more string) []byte {
 // Free exports default package method.
 func Free(buf []byte) {
 	DefaultMemPool.Free(buf)
+}
+
+// SetDebug .
+func SetDebug(enable bool) {
+	mp, ok := DefaultMemPool.(*MemPool)
+	if ok {
+		mp.Debug = enable
+	}
+}
+
+// LogDebugInfo .
+func LogDebugInfo() {
+	mp, ok := DefaultMemPool.(*MemPool)
+	if ok {
+		mp.LogDebugInfo()
+	}
 }
 
 func getStack() string {
