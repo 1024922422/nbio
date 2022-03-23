@@ -330,13 +330,13 @@ func (u *connState) isMessageTooLarge(len int) bool {
 
 // Read .
 func (u *connState) Read(p *nbhttp.Parser, data []byte) error {
-	bufLen := len(u.buffer)
-	if u.common.ReadLimit > 0 && (int64(bufLen+len(data)) > u.common.ReadLimit || int64(bufLen+len(u.message)) > u.common.ReadLimit) {
+	oldLen := len(u.buffer)
+	if u.common.ReadLimit > 0 && (int64(oldLen+len(data)) > u.common.ReadLimit || int64(oldLen+len(u.message)) > u.common.ReadLimit) {
 		return nbhttp.ErrTooLong
 	}
 
 	var oldBuffer []byte
-	if bufLen == 0 {
+	if oldLen == 0 {
 		u.buffer = data
 	} else {
 		u.buffer = mempool.Append(u.buffer, data...)
@@ -387,8 +387,7 @@ func (u *connState) Read(p *nbhttp.Parser, data []byte) error {
 						err = ErrMessageTooLarge
 						break
 					}
-					u.message = u.Engine.BodyAllocator.Realloc(u.message, len(u.message)+len(body))
-					copy(u.message[len(u.message)-len(body):], body)
+					u.message = u.Engine.BodyAllocator.Append(u.message, body...)
 				}
 			}
 			if fin {
@@ -431,14 +430,14 @@ func (u *connState) Read(p *nbhttp.Parser, data []byte) error {
 		}
 	}
 
-	if bufLen == 0 {
+	if oldLen == 0 {
 		if len(u.buffer) > 0 {
 			tmp := u.buffer
 			u.buffer = mempool.Malloc(len(tmp))
 			copy(u.buffer, tmp)
 		}
 	} else {
-		if len(u.buffer) < len(oldBuffer) {
+		if len(u.buffer) < oldLen && len(u.buffer) > 0 {
 			tmp := u.buffer
 			u.buffer = mempool.Malloc(len(tmp))
 			copy(u.buffer, tmp)
@@ -455,11 +454,13 @@ func (u *connState) Close(p *nbhttp.Parser, err error) {
 		u.conn.onClose(u.conn, err)
 		u.conn.Close()
 	}
-	if len(u.buffer) > 0 {
+	if u.buffer != nil {
 		mempool.Free(u.buffer)
+		u.buffer = nil
 	}
-	if len(u.message) > 0 {
+	if u.message != nil {
 		mempool.Free(u.message)
+		u.message = nil
 	}
 }
 
