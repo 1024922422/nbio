@@ -76,12 +76,9 @@ func (mp *MemPool) Malloc(size int) []byte {
 	}
 
 	if mp.Debug {
-		if size <= 0 {
-			panic("malloc zero size buf")
-		}
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
-		ptr := uintptr(unsafe.Pointer(&((*pbuf)[:1][0])))
+		ptr := getBufferPtr(*pbuf)
 		mp.addAllocStack(ptr)
 	}
 
@@ -95,12 +92,11 @@ func (mp *MemPool) Realloc(buf []byte, size int) []byte {
 	}
 
 	if !mp.Debug {
-		pbuf := &buf
-		need := size - cap(*pbuf)
+		need := size - cap(buf)
 		if need > 0 {
-			*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+			buf = append(buf[:cap(buf)], make([]byte, need)...)
 		}
-		return (*pbuf)[:size]
+		return buf[:size]
 	}
 
 	return mp.reallocDebug(buf, size)
@@ -111,13 +107,12 @@ func (mp *MemPool) reallocDebug(buf []byte, size int) []byte {
 		panic("realloc zero size buf")
 	}
 
-	oldPtr := uintptr(unsafe.Pointer(&buf[:1][0]))
-	pbuf := &buf
-	need := size - cap(*pbuf)
+	oldPtr := getBufferPtr(buf)
+	need := size - cap(buf)
 	if need > 0 {
-		*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+		buf = append(buf[:cap(buf)], make([]byte, need)...)
 	}
-	newPtr := uintptr(unsafe.Pointer(&((*pbuf)[:1][0])))
+	newPtr := getBufferPtr(buf)
 	if newPtr != oldPtr {
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
@@ -125,7 +120,7 @@ func (mp *MemPool) reallocDebug(buf []byte, size int) []byte {
 		mp.addAllocStack(newPtr)
 	}
 
-	return (*pbuf)[:size]
+	return (buf)[:size]
 }
 
 // Append .
@@ -138,11 +133,11 @@ func (mp *MemPool) Append(buf []byte, more ...byte) []byte {
 
 func (mp *MemPool) appendDebug(buf []byte, more ...byte) []byte {
 	if cap(buf) == 0 {
-		panic("append zero size buf")
+		panic("append zero cap buf")
 	}
-	oldPtr := uintptr(unsafe.Pointer(&buf[:1][0]))
+	oldPtr := getBufferPtr(buf)
 	buf = append(buf, more...)
-	newPtr := uintptr(unsafe.Pointer(&buf[:1][0]))
+	newPtr := getBufferPtr(buf)
 	if newPtr != oldPtr {
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
@@ -162,11 +157,11 @@ func (mp *MemPool) AppendString(buf []byte, more string) []byte {
 
 func (mp *MemPool) appendStringDebug(buf []byte, more string) []byte {
 	if cap(buf) == 0 {
-		panic("append zero size buf")
+		panic("append zero cap buf")
 	}
-	oldPtr := uintptr(unsafe.Pointer(&buf[:1][0]))
+	oldPtr := getBufferPtr(buf)
 	buf = append(buf, more...)
-	newPtr := uintptr(unsafe.Pointer(&buf[:1][0]))
+	newPtr := getBufferPtr(buf)
 	if newPtr != oldPtr {
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
@@ -187,7 +182,7 @@ func (mp *MemPool) Free(buf []byte) {
 	if mp.Debug {
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
-		ptr := uintptr(unsafe.Pointer(&buf[:1][0]))
+		ptr := getBufferPtr(buf)
 		mp.deleteAllocStack(ptr)
 	}
 
@@ -201,7 +196,7 @@ func (mp *MemPool) addAllocStack(ptr uintptr) {
 
 func (mp *MemPool) deleteAllocStack(ptr uintptr) {
 	if _, ok := mp.allocStacks[ptr]; !ok {
-		panic("delete not exist stack")
+		panic("delete buffer which is not from pool")
 	}
 	mp.freeCnt++
 	delete(mp.allocStacks, ptr)
@@ -293,6 +288,13 @@ func LogDebugInfo() {
 	if ok {
 		mp.LogDebugInfo()
 	}
+}
+
+func getBufferPtr(buf []byte) uintptr {
+	if cap(buf) == 0 {
+		panic("zero cap buffer")
+	}
+	return uintptr(unsafe.Pointer(&((buf)[:1][0])))
 }
 
 func getStack() string {
