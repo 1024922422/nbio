@@ -20,7 +20,7 @@ type Allocator interface {
 }
 
 // DefaultMemPool .
-var DefaultMemPool = New(64, 64*1024)
+var DefaultMemPool = New(64, 16*1024)
 
 // MemPool .
 type MemPool struct {
@@ -126,6 +126,15 @@ func (mp *MemPool) reallocDebug(buf []byte, size int) []byte {
 // Append .
 func (mp *MemPool) Append(buf []byte, more ...byte) []byte {
 	if !mp.Debug {
+		bl := len(buf)
+		total := bl + len(more)
+		if bl < mp.bigSize && total >= mp.bigSize {
+			newBuf := mp.Malloc(total)
+			copy(newBuf, buf)
+			copy(newBuf[bl:], more)
+			mp.Free(buf)
+			return newBuf
+		}
 		return append(buf, more...)
 	}
 	return mp.appendDebug(buf, more...)
@@ -135,6 +144,20 @@ func (mp *MemPool) appendDebug(buf []byte, more ...byte) []byte {
 	if cap(buf) == 0 {
 		panic("append zero cap buf")
 	}
+	bl := len(buf)
+	total := bl + len(more)
+	if bl < mp.bigSize && total >= mp.bigSize {
+		newBuf := mp.Malloc(total)
+		newPtr := getBufferPtr(newBuf)
+		mp.mux.Lock()
+		defer mp.mux.Unlock()
+		mp.addAllocStack(newPtr)
+		copy(newBuf, buf)
+		copy(newBuf[bl:], more)
+		mp.Free(buf)
+		return newBuf
+	}
+
 	oldPtr := getBufferPtr(buf)
 	buf = append(buf, more...)
 	newPtr := getBufferPtr(buf)
@@ -150,6 +173,15 @@ func (mp *MemPool) appendDebug(buf []byte, more ...byte) []byte {
 // AppendString .
 func (mp *MemPool) AppendString(buf []byte, more string) []byte {
 	if !mp.Debug {
+		bl := len(buf)
+		total := bl + len(more)
+		if bl < mp.bigSize && total >= mp.bigSize {
+			newBuf := mp.Malloc(total)
+			copy(newBuf, buf)
+			copy(newBuf[bl:], more)
+			mp.Free(buf)
+			return newBuf
+		}
 		return append(buf, more...)
 	}
 	return mp.appendStringDebug(buf, more)
@@ -159,6 +191,20 @@ func (mp *MemPool) appendStringDebug(buf []byte, more string) []byte {
 	if cap(buf) == 0 {
 		panic("append zero cap buf")
 	}
+	bl := len(buf)
+	total := bl + len(more)
+	if bl < mp.bigSize && total >= mp.bigSize {
+		newBuf := mp.Malloc(total)
+		newPtr := getBufferPtr(newBuf)
+		mp.mux.Lock()
+		defer mp.mux.Unlock()
+		mp.addAllocStack(newPtr)
+		copy(newBuf, buf)
+		copy(newBuf[bl:], more)
+		mp.Free(buf)
+		return newBuf
+	}
+
 	oldPtr := getBufferPtr(buf)
 	buf = append(buf, more...)
 	newPtr := getBufferPtr(buf)
