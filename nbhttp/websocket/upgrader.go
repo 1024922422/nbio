@@ -430,20 +430,24 @@ func (u *connState) Read(p *nbhttp.Parser, data []byte) error {
 		}
 	}
 
-	if len(u.buffer) > 0 {
-		if oldLen == 0 {
+	if oldLen == 0 {
+		if len(u.buffer) > 0 {
 			tmp := u.buffer
 			u.buffer = mempool.Malloc(len(tmp))
 			copy(u.buffer, tmp)
-		} else if len(u.buffer) < oldLen {
-			tmp := u.buffer
-			u.buffer = mempool.Malloc(len(tmp))
-			copy(u.buffer, tmp)
+		} else {
+			u.buffer = nil
+		}
+	} else {
+		if len(u.buffer) == 0 {
+			mempool.Free(u.buffer)
+			u.buffer = nil
+		} else if len(u.buffer) < len(oldBuffer) {
+			tmp := mempool.Malloc(len(u.buffer))
+			copy(tmp, u.buffer)
+			u.buffer = tmp
 			mempool.Free(oldBuffer)
 		}
-	} else if oldLen > 0 && cap(u.buffer) > 0 {
-		mempool.Free(u.buffer)
-		u.buffer = nil
 	}
 
 	return err
