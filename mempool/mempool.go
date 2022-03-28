@@ -20,7 +20,7 @@ type Allocator interface {
 }
 
 // DefaultMemPool .
-var DefaultMemPool = New(64, 8*1024)
+var DefaultMemPool = New(32*1024, 32*1024)
 
 // MemPool .
 type MemPool struct {
@@ -29,8 +29,8 @@ type MemPool struct {
 
 	smallSize int
 	bigSize   int
-	smallPool sync.Pool
-	bigPool   sync.Pool
+	smallPool *sync.Pool
+	bigPool   *sync.Pool
 
 	allocCnt    uint64
 	freeCnt     uint64
@@ -45,10 +45,16 @@ func New(smallSize, bigSize int) Allocator {
 	if bigSize <= 0 {
 		bigSize = 64 * 1024
 	}
+	if bigSize < smallSize {
+		bigSize = smallSize
+	}
+
 	mp := &MemPool{
 		smallSize:   smallSize,
 		bigSize:     bigSize,
 		allocStacks: map[uintptr]string{},
+		smallPool:   &sync.Pool{},
+		bigPool:     &sync.Pool{},
 		// Debug:       true,
 	}
 	mp.smallPool.New = func() interface{} {
@@ -59,14 +65,18 @@ func New(smallSize, bigSize int) Allocator {
 		buf := make([]byte, bigSize)
 		return &buf
 	}
+	if bigSize == smallSize {
+		mp.bigPool = mp.smallPool
+	}
+
 	return mp
 }
 
 // Malloc .
 func (mp *MemPool) Malloc(size int) []byte {
-	pool := &mp.smallPool
+	pool := mp.smallPool
 	if size >= mp.bigSize {
-		pool = &mp.bigPool
+		pool = mp.bigPool
 	}
 
 	pbuf := pool.Get().(*[]byte)
@@ -265,9 +275,9 @@ func (mp *MemPool) appendStringDebug(buf []byte, more string) []byte {
 // Free .
 func (mp *MemPool) Free(buf []byte) {
 	size := cap(buf)
-	pool := &mp.smallPool
+	pool := mp.smallPool
 	if size >= mp.bigSize {
-		pool = &mp.bigPool
+		pool = mp.bigPool
 	}
 
 	if mp.Debug {
