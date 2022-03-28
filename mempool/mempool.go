@@ -20,7 +20,7 @@ type Allocator interface {
 }
 
 // DefaultMemPool .
-var DefaultMemPool = New(64, 16*1024)
+var DefaultMemPool = New(64, 8*1024)
 
 // MemPool .
 type MemPool struct {
@@ -92,6 +92,16 @@ func (mp *MemPool) Realloc(buf []byte, size int) []byte {
 	}
 
 	if !mp.Debug {
+		if cap(buf) < mp.bigSize && size >= mp.bigSize {
+			pbuf := mp.bigPool.Get().(*[]byte)
+			need := size - cap(*pbuf)
+			if need > 0 {
+				*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+			}
+			copy(*pbuf, buf)
+			mp.Free(buf)
+			return (*pbuf)[:size]
+		}
 		need := size - cap(buf)
 		if need > 0 {
 			buf = append(buf[:cap(buf)], make([]byte, need)...)
@@ -106,7 +116,20 @@ func (mp *MemPool) reallocDebug(buf []byte, size int) []byte {
 	if cap(buf) == 0 {
 		panic("realloc zero size buf")
 	}
-
+	if cap(buf) < mp.bigSize && size >= mp.bigSize {
+		pbuf := mp.bigPool.Get().(*[]byte)
+		need := size - cap(*pbuf)
+		if need > 0 {
+			*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+		}
+		copy(*pbuf, buf)
+		mp.Free(buf)
+		ptr := getBufferPtr(*pbuf)
+		mp.mux.Lock()
+		defer mp.mux.Unlock()
+		mp.addAllocStack(ptr)
+		return (*pbuf)[:size]
+	}
 	oldPtr := getBufferPtr(buf)
 	need := size - cap(buf)
 	if need > 0 {
@@ -129,11 +152,15 @@ func (mp *MemPool) Append(buf []byte, more ...byte) []byte {
 		bl := len(buf)
 		total := bl + len(more)
 		if bl < mp.bigSize && total >= mp.bigSize {
-			newBuf := mp.Malloc(total)
-			copy(newBuf, buf)
-			copy(newBuf[bl:], more)
+			pbuf := mp.bigPool.Get().(*[]byte)
+			need := total - cap(*pbuf)
+			if need > 0 {
+				*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+			}
+			copy(*pbuf, buf)
+			copy((*pbuf)[bl:], more)
 			mp.Free(buf)
-			return newBuf
+			return (*pbuf)[:total]
 		}
 		return append(buf, more...)
 	}
@@ -147,15 +174,19 @@ func (mp *MemPool) appendDebug(buf []byte, more ...byte) []byte {
 	bl := len(buf)
 	total := bl + len(more)
 	if bl < mp.bigSize && total >= mp.bigSize {
-		newBuf := mp.Malloc(total)
-		newPtr := getBufferPtr(newBuf)
+		pbuf := mp.bigPool.Get().(*[]byte)
+		need := total - cap(*pbuf)
+		if need > 0 {
+			*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+		}
+		copy(*pbuf, buf)
+		copy((*pbuf)[bl:], more)
+		mp.Free(buf)
+		ptr := getBufferPtr(*pbuf)
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
-		mp.addAllocStack(newPtr)
-		copy(newBuf, buf)
-		copy(newBuf[bl:], more)
-		mp.Free(buf)
-		return newBuf
+		mp.addAllocStack(ptr)
+		return (*pbuf)[:total]
 	}
 
 	oldPtr := getBufferPtr(buf)
@@ -176,11 +207,15 @@ func (mp *MemPool) AppendString(buf []byte, more string) []byte {
 		bl := len(buf)
 		total := bl + len(more)
 		if bl < mp.bigSize && total >= mp.bigSize {
-			newBuf := mp.Malloc(total)
-			copy(newBuf, buf)
-			copy(newBuf[bl:], more)
+			pbuf := mp.bigPool.Get().(*[]byte)
+			need := total - cap(*pbuf)
+			if need > 0 {
+				*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+			}
+			copy(*pbuf, buf)
+			copy((*pbuf)[bl:], more)
 			mp.Free(buf)
-			return newBuf
+			return (*pbuf)[:total]
 		}
 		return append(buf, more...)
 	}
@@ -194,15 +229,19 @@ func (mp *MemPool) appendStringDebug(buf []byte, more string) []byte {
 	bl := len(buf)
 	total := bl + len(more)
 	if bl < mp.bigSize && total >= mp.bigSize {
-		newBuf := mp.Malloc(total)
-		newPtr := getBufferPtr(newBuf)
+		pbuf := mp.bigPool.Get().(*[]byte)
+		need := total - cap(*pbuf)
+		if need > 0 {
+			*pbuf = append((*pbuf)[:cap(*pbuf)], make([]byte, need)...)
+		}
+		copy(*pbuf, buf)
+		copy((*pbuf)[bl:], more)
+		mp.Free(buf)
+		ptr := getBufferPtr(*pbuf)
 		mp.mux.Lock()
 		defer mp.mux.Unlock()
-		mp.addAllocStack(newPtr)
-		copy(newBuf, buf)
-		copy(newBuf[bl:], more)
-		mp.Free(buf)
-		return newBuf
+		mp.addAllocStack(ptr)
+		return (*pbuf)[:total]
 	}
 
 	oldPtr := getBufferPtr(buf)
