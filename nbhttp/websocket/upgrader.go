@@ -126,7 +126,9 @@ func (u *Upgrader) OnMessage(h func(*Conn, MessageType, []byte)) {
 	if h != nil {
 		u.messageHandler = func(c *Conn, messageType MessageType, data []byte) {
 			if c.Engine.ReleaseWebsocketPayload {
-				defer c.Engine.BodyAllocator.Free(data)
+				if len(data) > 0 {
+					defer c.Engine.BodyAllocator.Free(data)
+				}
 			}
 			h(c, messageType, data)
 		}
