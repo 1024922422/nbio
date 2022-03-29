@@ -27,12 +27,9 @@ const (
 	MaxInt = int64(int(MaxUint >> 1))
 )
 
-// Parser .
-type Parser struct {
-	mux sync.Mutex
+var emptyParsingFields = parsingFields{}
 
-	cache []byte
-
+type parsingFields struct {
 	proto string
 
 	statusCode int
@@ -48,6 +45,14 @@ type Parser struct {
 	chunkSize     int
 	chunked       bool
 	headerExists  bool
+}
+
+// Parser .
+type Parser struct {
+	mux sync.Mutex
+	parsingFields
+
+	cache []byte
 
 	state    int8
 	isClient bool
@@ -339,6 +344,7 @@ UPGRADER:
 				if err != nil {
 					return err
 				}
+
 				p.Processor.OnContentLength(p.contentLength)
 				err = p.parseTrailer()
 				if err != nil {
@@ -761,7 +767,7 @@ func (p *Parser) parseTrailer() error {
 
 func (p *Parser) handleMessage() {
 	p.Processor.OnComplete(p)
-	p.header = nil
+	p.parsingFields = emptyParsingFields
 
 	if !p.isClient {
 		p.nextState(stateMethodBefore)
