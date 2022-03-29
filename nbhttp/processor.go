@@ -235,10 +235,12 @@ func (p *ServerProcessor) OnComplete(parser *Parser) {
 	}
 
 	response := NewResponse(p.parser, request, p.enableSendfile)
-	parser.Execute(func() {
+	if !parser.Execute(func() {
 		p.handler.ServeHTTP(response, request)
 		p.flushResponse(response)
-	})
+	}) {
+		releaseRequest(request)
+	}
 }
 
 func (p *ServerProcessor) flushResponse(res *Response) {

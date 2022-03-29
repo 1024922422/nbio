@@ -66,7 +66,7 @@ type Parser struct {
 
 	Conn net.Conn
 
-	Execute func(f func())
+	Execute func(f func()) bool
 }
 
 func (p *Parser) nextState(state int8) {
@@ -771,7 +771,7 @@ func (p *Parser) handleMessage() {
 }
 
 // NewParser .
-func NewParser(processor Processor, isClient bool, readLimit int, executor func(f func())) *Parser {
+func NewParser(processor Processor, isClient bool, readLimit int, executor func(f func()) bool) *Parser {
 	if processor == nil {
 		processor = NewEmptyProcessor()
 	}
@@ -783,8 +783,9 @@ func NewParser(processor Processor, isClient bool, readLimit int, executor func(
 		readLimit = DefaultHTTPReadLimit
 	}
 	if executor == nil {
-		executor = func(f func()) {
+		executor = func(f func()) bool {
 			f()
+			return true
 		}
 	}
 	p := &Parser{
