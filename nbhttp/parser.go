@@ -143,7 +143,7 @@ func (p *Parser) Read(data []byte) error {
 		if offset+len(data) > p.readLimit {
 			return ErrTooLong
 		}
-		p.cache = append(p.cache, data...)
+		p.cache = mempool.Append(p.cache, data...)
 		data = p.cache
 	}
 

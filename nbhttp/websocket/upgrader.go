@@ -900,7 +900,7 @@ func (u *connState) readAll(r io.Reader, size int) ([]byte, error) {
 			if al > maxAppendSize {
 				al = maxAppendSize
 			}
-			buf = append(buf, make([]byte, al)...)[:l]
+			buf = u.Engine.BodyAllocator.Append(buf, make([]byte, al)...)[:l]
 		}
 	}
 }
