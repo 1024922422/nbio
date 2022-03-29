@@ -442,7 +442,7 @@ func (u *connState) Read(p *nbhttp.Parser, data []byte) error {
 		}
 	} else {
 		if len(u.buffer) == 0 {
-			mempool.Free(u.buffer)
+			mempool.Free(oldBuffer)
 			u.buffer = nil
 		} else if len(u.buffer) < len(oldBuffer) {
 			tmp := mempool.Malloc(len(u.buffer))
