@@ -287,7 +287,10 @@ func (p *ServerProcessor) flushResponse(res *Response) {
 
 // Close .
 func (p *ServerProcessor) Close(parser *Parser, err error) {
-
+	if p.request != nil {
+		releaseRequest(p.request)
+		p.request = nil
+	}
 }
 
 // NewServerProcessor .
@@ -397,15 +400,15 @@ func (p *ClientProcessor) OnComplete(parser *Parser) {
 	p.response = nil
 	parser.Execute(func() {
 		p.handler(res, nil)
-		if res.Body != nil {
-
-		}
 		releaseClientResponse(res)
 	})
 }
 
 // Close .
 func (p *ClientProcessor) Close(parser *Parser, err error) {
+	if p.response != nil {
+		releaseClientResponse(p.response)
+	}
 	p.conn.CloseWithError(err)
 }
 
