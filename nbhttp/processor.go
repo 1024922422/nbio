@@ -398,10 +398,12 @@ func (p *ClientProcessor) OnTrailerHeader(key, value string) {
 func (p *ClientProcessor) OnComplete(parser *Parser) {
 	res := p.response
 	p.response = nil
-	parser.Execute(func() {
+	if !parser.Execute(func() {
 		p.handler(res, nil)
 		releaseClientResponse(res)
-	})
+	}) {
+		releaseClientResponse(res)
+	}
 }
 
 // Close .
